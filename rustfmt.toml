@@ -1,0 +1,2 @@
+# required by emacs rust-mode to work properly
+edition = "2021"

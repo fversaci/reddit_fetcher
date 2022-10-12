@@ -1,0 +1,62 @@
+{
+  "cat_subreddits": {
+    "Learn": [
+      "Science",
+      "Technology",
+      "Futurology",
+      "History",
+      "TodayILearned",
+      "MapPorn",
+      "DataIsBeautiful",
+      "ExplainLikeImFive",
+      "LifeHacks",
+      "DamnThatsInteresting"
+    ],
+    "Images": [
+      "Aww",
+      "Eyebleach",
+      "Pics",
+      "Art",
+      "CozyPlaces",
+      "StreetArtPorn",
+      "AbandonedPorn",
+      "AnimalPorn",
+      "BotanicalPorn",
+      "CityPorn",
+      "HistoryPorn",
+      "EarthPorn",
+      "ArtefactPorn",
+      "DesignPorn",
+      "ArchitecturePorn"
+    ],
+    "Ask": [
+      "AskReddit",
+      "AskWomen",
+      "AskMen",
+      "AskScience",
+      "IAmA"
+    ],
+    "General": [
+      "All",
+      "BestOf",
+      "Funny",
+      "Videos",
+      "Music",
+      "FacePalm",
+      "InternetIsBeautiful",
+      "NextFuckingLevel"
+    ],
+    "News": [
+      "Italy",
+      "de",
+      "Europe",
+      "Asia",
+      "Africa",
+      "WorldNews",
+      "UpliftingNews",
+      "News"
+    ]
+  },
+  "id_whitelist": [
+  ]
+}

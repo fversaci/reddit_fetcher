@@ -1,79 +1,49 @@
-use roux::{response::BasicThing, submission::SubmissionData, Subreddit};
-use teloxide::{prelude::*, utils::command::BotCommands};
-use tokio;
+use serde::{Deserialize, Serialize};
+use sqlx::SqlitePool;
+use std::collections::{HashMap, HashSet};
+use std::fs;
+use std::sync::Arc;
+use teloxide::{dispatching::dialogue::InMemStorage, prelude::*};
 
-async fn get_posts(subred: &str, tot: u32) -> Vec<BasicThing<SubmissionData>> {
-    let subreddit = Subreddit::new(subred);
-    let hot = subreddit.hot(tot, None).await;
-    let posts = hot.unwrap().data.children;
-    return posts;
+mod persist;
+mod reddit;
+mod telegram;
+
+pub type SubredditsCats = HashMap<String, Vec<String>>;
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct MyBotConfig {
+    cat_subreddits: SubredditsCats,
+    id_whitelist: HashSet<ChatId>,
 }
 
-async fn get_hot(subred: &str, tot: u32) -> Vec<String> {
-    let posts = get_posts(&subred, tot).await;
-    let mut ret = Vec::new();
-    for post in posts {
-        if post.data.stickied || post.data.is_self {
-            continue;
-        }
-        let piece = format!("{}\n--> {}", post.data.title, post.data.url.unwrap());
-        ret.push(piece);
-    }
-    return ret;
+#[derive(Clone, Debug)]
+pub struct MyState {
+    my_conf: MyBotConfig,
+    db: SqlitePool,
+}
+
+fn get_conf() -> MyBotConfig {
+    let fname = "conf/defaults.json";
+    let conf_txt = fs::read_to_string(fname)
+        .unwrap_or_else(|_| panic!("Cannot find configuration file: {}", fname));
+    let my_conf: MyBotConfig = serde_json::from_str(&conf_txt)
+        .unwrap_or_else(|_| panic!("Unable to parse configuration file: {}", fname));
+    my_conf
 }
 
 #[tokio::main]
 async fn main() {
     pretty_env_logger::init();
-    log::info!("Starting throw dice bot...");
-
+    log::info!("Starting bot...");
     let bot = Bot::from_env();
-
-    teloxide::commands_repl(bot, answer, Command::ty()).await;
-}
-
-#[derive(BotCommands, Clone)]
-#[command(
-    rename_rule = "lowercase",
-    description = "These commands are supported:"
-)]
-enum Command {
-    #[command(description = "display this text.")]
-    Help,
-    #[command(description = "Get top 3 hot posts from subreddit.")]
-    Hot(String),
-    #[command(
-        description = "get top n hot posts from subreddit.",
-        parse_with = "split"
-    )]
-    HotN { subred: String, tot: u32 },
-}
-
-async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
-    match cmd {
-        Command::Help => {
-            bot.send_message(msg.chat.id, Command::descriptions().to_string())
-                .await?
-        }
-        Command::Hot(subred) => {
-            let tot = 3;
-            let posts = get_hot(&subred, tot).await;
-            let welcome = format!("Last {tot} hot pics from {subred}...");
-            let mut r = bot.send_message(msg.chat.id, welcome).await?;
-            for post in posts {
-                r = bot.send_message(msg.chat.id, post).await?;
-            }
-            r
-        }
-        Command::HotN { subred, tot } => {
-            let posts = get_hot(&subred, tot).await;
-            let welcome = format!("Last {tot} hot pics from {subred}...");
-            let mut r = bot.send_message(msg.chat.id, welcome).await?;
-            for post in posts {
-                r = bot.send_message(msg.chat.id, post).await?;
-            }
-            r
-        }
-    };
-    Ok(())
+    let my_conf = get_conf();
+    log::debug!("{my_conf:?}");
+    let db = persist::open_db().await.expect("Cannot open DB");
+    let my_state = Arc::new(MyState { my_conf, db });
+    Dispatcher::builder(bot, telegram::schema(my_state))
+        .dependencies(dptree::deps![InMemStorage::<telegram::State>::new()])
+        .enable_ctrlc_handler()
+        .build()
+        .dispatch()
+        .await;
 }
