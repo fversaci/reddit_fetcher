@@ -23,8 +23,9 @@ cargo run --release
 
 ### Filtering the user access
 
-The configuration file (conf/defaults.json) contains an `id_whitelist`
-field, which can be filled with a list of allowed Telegram user_ids:
+The configuration file [conf/defaults.json](conf/defaults.json)
+contains an `id_whitelist` field, which can be filled with a list of
+allowed Telegram user_ids:
 
 ```json
   "id_whitelist": [
