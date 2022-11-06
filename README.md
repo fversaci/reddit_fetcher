@@ -13,7 +13,7 @@ preferences are saved in a simple sqlite3 DB.
 Assuming you have cargo correctly setup, just run:
 
 ```bash
-TELOXIDE_TOKEN=1234567890:YOUR_TELEGRAM_BOT_TOKEN \
+TELOXIDE_TOKEN=123_YOUR_TELEGRAM_BOT_TOKEN_567 \
 DATABASE_URL="sqlite://conf/users.db3" \
 RUST_LOG=reddit_fetcher=info \
 cargo run --release
