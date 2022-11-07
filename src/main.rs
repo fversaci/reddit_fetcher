@@ -27,7 +27,7 @@ fn get_conf() -> MyBotConfig {
     let conf_txt = fs::read_to_string(fname)
         .unwrap_or_else(|_| panic!("Cannot find configuration file: {}", fname));
     let my_conf: MyBotConfig = serde_json::from_str(&conf_txt)
-        .unwrap_or_else(|_| panic!("Unable to parse configuration file: {}", fname));
+        .unwrap_or_else(|err| panic!("Unable to parse configuration file {}: {}", fname, err));
     my_conf
 }
 
