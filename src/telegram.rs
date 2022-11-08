@@ -478,8 +478,8 @@ async fn select_tot(
         ..rcmd
     };
     // select tot
-    let mut red_tots: Vec<u32> = (1..=5_u32).collect();
-    red_tots.extend(vec![7, 10, 20]);
+    let mut red_tots: Vec<u32> = (1..=3_u32).collect();
+    red_tots.extend(vec![5, 7, 10, 20, 40]);
     let red_tots = red_tots
         .iter()
         .map(|rt| rt.to_string())
