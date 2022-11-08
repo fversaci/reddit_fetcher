@@ -18,7 +18,7 @@ use tokio::fs;
 use uuid::Uuid;
 
 type MyDialogue = Dialogue<State, InMemStorage<State>>;
-type HandlerResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
+pub type HandlerResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
 #[derive(Default, Clone)]
 pub enum State {
@@ -520,10 +520,7 @@ async fn issue_cmd(
         "*Shown {} {} posts from {} / {}*",
         rcmd.tot, rcmd.view, rcmd.category, rcmd.subreddit
     );
-    let posts = reddit::get_posts(rcmd).await;
-    for post in posts {
-        bot.send_message(chat_id, post).await?;
-    }
+    reddit::send_posts(bot.clone(), chat_id, rcmd).await?;
     let md = payloads::SendMessage::new(chat_id, summary);
 
     type Sender = JsonRequest<payloads::SendMessage>;
