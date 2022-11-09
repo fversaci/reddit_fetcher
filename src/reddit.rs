@@ -65,7 +65,7 @@ async fn get_posts_raw(rcmd: RedditCmd) -> Vec<BasicThing<SubmissionData>> {
 }
 
 pub async fn send_tit_url(bot: &Bot, chat_id: ChatId, tit: String, url: String) -> HandlerResult {
-    let tit_url = format!("{}\n{}", url, tit);
+    let tit_url = format!("{}\n{}", tit, url);
     bot.send_message(chat_id, tit_url).await?;
     Ok(())
 }
@@ -76,6 +76,7 @@ pub async fn send_posts(bot: Bot, chat_id: ChatId, rcmd: RedditCmd) -> HandlerRe
         if post.data.stickied {
             continue;
         }
+        let max_size = 50000000; // 50MB
         let tit = post.data.title;
         let url = post.data.url.unwrap_or_default(); // defaults to ""
         if !url.is_empty() {
@@ -83,24 +84,32 @@ pub async fn send_posts(bot: Bot, chat_id: ChatId, rcmd: RedditCmd) -> HandlerRe
             if let Some(tmpfile) = tmpfile {
                 match tmpfile {
                     FSFile::Image(f) => {
-                        let fname = InputFile::file(&f);
-                        let res = bot.send_photo(chat_id, fname).await;
-                        std::fs::remove_file(f)?;
-                        if res.is_err() {
+                        let sz = fs::metadata(&f)?.len();
+                        if sz > max_size {
                             send_tit_url(&bot, chat_id, tit, url).await?;
                         } else {
                             bot.send_message(chat_id, &tit).await?;
+                            let fname = InputFile::file(&f);
+                            let res = bot.send_photo(chat_id, fname).await;
+                            if res.is_err() {
+                                bot.send_message(chat_id, url).await?;
+                            }
                         }
+                        std::fs::remove_file(f)?;
                     }
                     FSFile::Video(f) => {
-                        let fname = InputFile::file(&f);
-                        let res = bot.send_video(chat_id, fname).await;
-                        std::fs::remove_file(f)?;
-                        if res.is_err() {
+                        let sz = fs::metadata(&f)?.len();
+                        if sz > max_size {
                             send_tit_url(&bot, chat_id, tit, url).await?;
                         } else {
                             bot.send_message(chat_id, &tit).await?;
+                            let fname = InputFile::file(&f);
+                            let res = bot.send_video(chat_id, fname).await;
+                            if res.is_err() {
+                                bot.send_message(chat_id, url).await?;
+                            }
                         }
+                        std::fs::remove_file(f)?;
                     }
                 }
             } else {
