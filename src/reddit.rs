@@ -37,7 +37,9 @@ enum FSFile {
 }
 
 async fn get_posts_raw(rcmd: RedditCmd) -> Vec<BasicThing<SubmissionData>> {
-    let subreddit = Subreddit::new(&rcmd.subreddit);
+    let mut subreddit = rcmd.subreddit;
+    subreddit.retain(|c| !c.is_whitespace()); // remove whitespaces
+    let subreddit = Subreddit::new(&subreddit);
     let tot = rcmd.tot;
     let view = match rcmd.view {
         RedReq::Hot => subreddit.hot(tot, None).await,
@@ -152,7 +154,7 @@ async fn download(url: &str) -> Result<Option<FSFile>> {
         return Ok(None);
     }
     let mut downloader = "yt-dlp";
-    let mut save_as = "-o";    
+    let mut save_as = "-o";
     let typ = get_type(url);
     if typ.is_none() {
         return Ok(None);

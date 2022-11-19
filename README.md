@@ -4,8 +4,9 @@
 
 This bot, written in Rust, shows the hot/top entries of selected
 [subreddits](https://www.reddit.com/). The subreddits can be chosen
-from a user-customizable list, or typed-in directly. Per-user
-preferences are saved in a simple sqlite3 DB.
+from a user-customizable list, or typed-in directly (and whitespaces
+are automatically removed). Per-user preferences are saved in a simple
+sqlite3 DB.
 
 ## Requirements
 
