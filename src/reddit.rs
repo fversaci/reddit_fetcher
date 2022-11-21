@@ -28,6 +28,7 @@ pub struct RedditCmd {
     pub subreddit: String,
     pub tot: u32,
     pub category: String,
+    pub last_seen: Option<String>,
 }
 
 #[derive(Debug)]
@@ -36,43 +37,47 @@ enum FSFile {
     Video(String),
 }
 
-async fn get_posts_raw(rcmd: RedditCmd) -> Vec<BasicThing<SubmissionData>> {
-    let mut subreddit = rcmd.subreddit;
+async fn get_posts_raw(rcmd: &mut RedditCmd) -> Vec<BasicThing<SubmissionData>> {
+    let mut subreddit = rcmd.subreddit.clone();
     subreddit.retain(|c| !c.is_whitespace()); // remove whitespaces
     let subreddit = Subreddit::new(&subreddit);
     let tot = rcmd.tot;
-    let view = match rcmd.view {
-        RedReq::Hot => subreddit.hot(tot, None).await,
-        RedReq::Rise => {
-            let options = FeedOption::new().limit(tot);
-            subreddit.rising(tot, Some(options)).await
-        }
+    let mut fopts = FeedOption::new().limit(tot);
+    if let Some(aft) = &rcmd.last_seen {
+        fopts = fopts.after(aft); // seeing next page
+    }
+    let view = match &rcmd.view {
+        RedReq::Hot => subreddit.hot(tot, Some(fopts)).await,
+        RedReq::Rise => subreddit.rising(tot, Some(fopts)).await,
         rr => {
             // Variants of Top command
-            let options = match rr {
-                RedReq::TopD => FeedOption::new().period(TimePeriod::Today).limit(tot),
-                RedReq::TopW => FeedOption::new().period(TimePeriod::ThisWeek).limit(tot),
-                RedReq::TopM => FeedOption::new().period(TimePeriod::ThisMonth).limit(tot),
-                RedReq::TopY => FeedOption::new().period(TimePeriod::ThisYear).limit(tot),
-                RedReq::TopA => FeedOption::new().period(TimePeriod::AllTime).limit(tot),
-                _ => FeedOption::new(), // unreachable
+            fopts = match rr {
+                RedReq::TopD => fopts.period(TimePeriod::Today),
+                RedReq::TopW => fopts.period(TimePeriod::ThisWeek),
+                RedReq::TopM => fopts.period(TimePeriod::ThisMonth),
+                RedReq::TopY => fopts.period(TimePeriod::ThisYear),
+                RedReq::TopA => fopts.period(TimePeriod::AllTime),
+                _ => fopts, // unreachable
             };
-            subreddit.top(tot, Some(options)).await
+            subreddit.top(tot, Some(fopts)).await
         }
     };
     match view {
-        Ok(stuff) => stuff.data.children,
+        Ok(stuff) => {
+            rcmd.last_seen = stuff.data.after;
+            stuff.data.children
+        }
         Err(_) => Vec::new(),
     }
 }
 
-pub async fn send_tit_url(bot: &Bot, chat_id: ChatId, tit: String, url: String) -> HandlerResult {
+async fn send_tit_url(bot: &Bot, chat_id: ChatId, tit: String, url: String) -> HandlerResult {
     let tit_url = format!("{}\n{}", tit, url);
     bot.send_message(chat_id, tit_url).await?;
     Ok(())
 }
 
-pub async fn send_posts(bot: Bot, chat_id: ChatId, rcmd: RedditCmd) -> HandlerResult {
+pub async fn send_posts(bot: Bot, chat_id: ChatId, rcmd: &mut RedditCmd) -> HandlerResult {
     let p_raw = get_posts_raw(rcmd).await;
     for post in p_raw {
         if post.data.stickied {

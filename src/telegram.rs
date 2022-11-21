@@ -46,6 +46,11 @@ pub enum State {
         rcmd: RedditCmd,
         prev: Option<MessageId>,
     },
+    NextPage {
+        my_state: Arc<MyState>,
+        rcmd: RedditCmd,
+        prev: Option<MessageId>,
+    },
     AcceptJSON {
         my_state: Arc<MyState>,
     },
@@ -126,6 +131,14 @@ pub fn schema(
                 prev
             }]
             .endpoint(issue_cmd),
+        )
+        .branch(
+            case![State::NextPage {
+                my_state,
+                rcmd,
+                prev
+            }]
+            .endpoint(next_page),
         );
 
     dialogue::enter::<Update, InMemStorage<State>, State, _>()
@@ -376,6 +389,7 @@ async fn select_subreddit(
         subreddit: "".to_string(),
         tot: 0,
         category: category.to_string(),
+        last_seen: None,
     };
     let red_subs = get_subreddits(&my_state, category, chat_id).await;
     let red_subs = red_subs.chunks(subs_per_row).map(|r| {
@@ -412,6 +426,7 @@ async fn sub_from_msg(
         subreddit: sub.clone(),
         tot: 0,
         category: "Custom".to_string(),
+        last_seen: None,
     };
     select_view_core(bot, dialogue, sub, (my_state, rcmd, m_id)).await
 }
@@ -500,6 +515,36 @@ async fn select_tot(
     Ok(())
 }
 
+async fn send_page(
+    bot: Bot,
+    rcmd: &mut RedditCmd,
+    chat_id: ChatId,
+) -> Result<Option<MessageId>, Box<dyn std::error::Error + Send + Sync>> {
+    let summary = format!(
+        "*Shown {} {} posts from {} / {}*",
+        rcmd.tot, rcmd.view, rcmd.category, rcmd.subreddit
+    );
+    reddit::send_posts(bot.clone(), chat_id, rcmd).await?;
+    let md = payloads::SendMessage::new(chat_id, summary);
+    type Sender = JsonRequest<payloads::SendMessage>;
+    let sent = Sender::new(bot.clone(), md.clone().parse_mode(ParseMode::MarkdownV2)).await;
+    // If markdown cannot be parsed, send it as raw text
+    if sent.is_err() {
+        Sender::new(bot.clone(), md.clone()).await?;
+    };
+    // select next page or quit
+    let cmd_next = vec!["Show more", "Done"];
+    let cmd_next = cmd_next
+        .iter()
+        .map(|cmd| cmd.to_string())
+        .map(|cmd| InlineKeyboardButton::callback(cmd.clone(), cmd));
+    let sent = bot
+        .send_message(chat_id, "What now?")
+        .reply_markup(InlineKeyboardMarkup::new([cmd_next]))
+        .await?;
+    Ok(Some(sent.id))
+}
+
 async fn issue_cmd(
     bot: Bot,
     dialogue: MyDialogue,
@@ -514,25 +559,50 @@ async fn issue_cmd(
         .unwrap_or_else(|| "1".to_string())
         .parse()
         .unwrap_or(1);
-    let rcmd = RedditCmd { tot, ..rcmd };
+    let mut rcmd = RedditCmd { tot, ..rcmd };
     log::info!("{chat_id} {rcmd:?}");
-    let summary = format!(
-        "*Shown {} {} posts from {} / {}*",
-        rcmd.tot, rcmd.view, rcmd.category, rcmd.subreddit
-    );
-    reddit::send_posts(bot.clone(), chat_id, rcmd).await?;
-    let md = payloads::SendMessage::new(chat_id, summary);
-
-    type Sender = JsonRequest<payloads::SendMessage>;
-    let sent = Sender::new(bot.clone(), md.clone().parse_mode(ParseMode::MarkdownV2)).await;
-    // If markdown cannot be parsed, send it as raw text
-    if sent.is_err() {
-        Sender::new(bot.clone(), md.clone()).await?;
-    };
+    // send pages and show next/quit menu
+    let prev = send_page(bot.clone(), &mut rcmd, chat_id).await?;
     dialogue
-        .update(State::Start {
-            my_state: my_state.clone(),
+        .update(State::NextPage {
+            my_state,
+            rcmd,
+            prev,
         })
         .await?;
-    select_category(bot, dialogue, my_state).await
+    Ok(())
+}
+
+async fn next_page(
+    bot: Bot,
+    dialogue: MyDialogue,
+    q: CallbackQuery,
+    tup_state: (Arc<MyState>, RedditCmd, Option<MessageId>),
+) -> HandlerResult {
+    let (my_state, mut rcmd, m_id) = tup_state;
+    let chat_id = dialogue.chat_id();
+    clean_buttons(bot.clone(), chat_id, m_id).await?;
+    let cmd_next = &q.data.unwrap_or_else(|| "Done".to_string());
+    match cmd_next.as_str() {
+        "Show more" => {
+            let prev = send_page(bot, &mut rcmd, chat_id).await?;
+            dialogue
+                .update(State::NextPage {
+                    my_state,
+                    rcmd,
+                    prev,
+                })
+                .await?;
+            Ok(())
+        }
+        _ => {
+            // "Done"
+            dialogue
+                .update(State::Start {
+                    my_state: my_state.clone(),
+                })
+                .await?;
+            select_category(bot, dialogue, my_state).await
+        }
+    }
 }
