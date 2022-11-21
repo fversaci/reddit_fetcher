@@ -4,16 +4,15 @@
 
 This bot, written in Rust, shows the hot/top entries of selected
 [subreddits](https://www.reddit.com/). The subreddits can be chosen
-from a user-customizable list, or typed-in directly (and whitespaces
-are automatically removed). Per-user preferences are saved in a simple
-sqlite3 DB.
+from a user-customizable list, or typed-in directly (whitespaces are
+ignored). Per-user preferences are saved in a simple sqlite3 DB.
 
 ## Requirements
 
 In case they are installed, Reddit-Fetcher tries and download images
 and videos using, respectively,
 [wget](https://www.gnu.org/software/wget/) and
-[yt-dlp](https://github.com/yt-dlp/yt-dlp) (thus increasesing the use
+[yt-dlp](https://github.com/yt-dlp/yt-dlp) (thus increasing the use
 of bandwidth of the bot...)
 
 ## Running the bot
