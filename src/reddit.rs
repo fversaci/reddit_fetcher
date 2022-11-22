@@ -5,7 +5,7 @@ use roux::{response::BasicThing, submission::SubmissionData, Subreddit};
 use std::fs;
 use strum_macros::{Display, EnumIter, EnumString};
 use teloxide::prelude::{ChatId, Requester};
-use teloxide::types::InputFile;
+use teloxide::types::{InputFile, Message};
 use teloxide::Bot;
 use tokio::process::Command;
 use url::Url;
@@ -33,8 +33,28 @@ pub struct RedditCmd {
 
 #[derive(Debug)]
 enum FSFile {
-    Image(String),
-    Video(String),
+    Image { f: String },
+    Video { f: String },
+}
+
+impl FSFile {
+    fn get_f(&self) -> String {
+        match self {
+            FSFile::Image { f } => f.to_string(),
+            FSFile::Video { f } => f.to_string(),
+        }
+    }
+    async fn send_out(
+        &self,
+        bot: &Bot,
+        chat_id: ChatId,
+        fname: InputFile,
+    ) -> Result<Message, teloxide::RequestError> {
+        match self {
+            FSFile::Image { f: _ } => bot.send_photo(chat_id, fname).await,
+            FSFile::Video { f: _ } => bot.send_video(chat_id, fname).await,
+        }
+    }
 }
 
 async fn get_posts_raw(rcmd: &mut RedditCmd) -> Vec<BasicThing<SubmissionData>> {
@@ -89,36 +109,19 @@ pub async fn send_posts(bot: Bot, chat_id: ChatId, rcmd: &mut RedditCmd) -> Hand
         if !url.is_empty() {
             let tmpfile = download(&url).await?;
             if let Some(tmpfile) = tmpfile {
-                match tmpfile {
-                    FSFile::Image(f) => {
-                        let sz = fs::metadata(&f)?.len();
-                        if sz > max_size {
-                            send_tit_url(&bot, chat_id, tit, url).await?;
-                        } else {
-                            bot.send_message(chat_id, &tit).await?;
-                            let fname = InputFile::file(&f);
-                            let res = bot.send_photo(chat_id, fname).await;
-                            if res.is_err() {
-                                bot.send_message(chat_id, url).await?;
-                            }
-                        }
-                        std::fs::remove_file(f)?;
-                    }
-                    FSFile::Video(f) => {
-                        let sz = fs::metadata(&f)?.len();
-                        if sz > max_size {
-                            send_tit_url(&bot, chat_id, tit, url).await?;
-                        } else {
-                            bot.send_message(chat_id, &tit).await?;
-                            let fname = InputFile::file(&f);
-                            let res = bot.send_video(chat_id, fname).await;
-                            if res.is_err() {
-                                bot.send_message(chat_id, url).await?;
-                            }
-                        }
-                        std::fs::remove_file(f)?;
+                let f = tmpfile.get_f();
+                let sz = fs::metadata(&f)?.len();
+                if sz > max_size {
+                    send_tit_url(&bot, chat_id, tit, url).await?;
+                } else {
+                    bot.send_message(chat_id, &tit).await?;
+                    let fname = InputFile::file(&f);
+                    let res = tmpfile.send_out(&bot, chat_id, fname).await;
+                    if res.is_err() {
+                        bot.send_message(chat_id, url).await?;
                     }
                 }
+                std::fs::remove_file(f)?;
             } else {
                 send_tit_url(&bot, chat_id, tit, url).await?;
             }
@@ -137,7 +140,7 @@ fn get_type(url: &str) -> Option<FSFile> {
         | url.starts_with("https://v.redd.it")
         | url.starts_with("https://gfycat.com")
     {
-        return Some(FSFile::Video("".to_string()));
+        return Some(FSFile::Video { f: "".to_string() });
     }
     if url.ends_with(".jpg")
         | url.ends_with(".jpeg")
@@ -147,7 +150,7 @@ fn get_type(url: &str) -> Option<FSFile> {
         | url.starts_with("https://i.redd.it")
         | url.starts_with("https://i.imgur.com")
     {
-        return Some(FSFile::Image("".to_string()));
+        return Some(FSFile::Image { f: "".to_string() });
     }
     None
 }
@@ -166,13 +169,13 @@ async fn download(url: &str) -> Result<Option<FSFile>> {
     }
     let typ = typ.unwrap();
     let ext = match typ {
-        FSFile::Image(_) => {
+        FSFile::Image { f: _ } => {
             // use wget for images
             downloader = "wget";
             save_as = "-O";
             ".jpg"
         }
-        FSFile::Video(_) => ".mp4",
+        FSFile::Video { f: _ } => ".mp4",
     };
     let base_dir = "/tmp/red_fetch/";
     fs::create_dir_all(base_dir)?;
@@ -191,8 +194,8 @@ async fn download(url: &str) -> Result<Option<FSFile>> {
     let status = child.unwrap().wait().await?;
     if status.success() {
         match typ {
-            FSFile::Image(_) => Ok(Some(FSFile::Image(tmpfile))),
-            FSFile::Video(_) => Ok(Some(FSFile::Video(tmpfile))),
+            FSFile::Image { f: _ } => Ok(Some(FSFile::Image { f: tmpfile })),
+            FSFile::Video { f: _ } => Ok(Some(FSFile::Video { f: tmpfile })),
         }
     } else {
         Ok(None)
