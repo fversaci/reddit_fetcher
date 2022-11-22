@@ -533,11 +533,13 @@ async fn send_page(
         Sender::new(bot.clone(), md.clone()).await?;
     };
     // select next page or quit
-    let cmd_next = vec!["Show more", "Done"];
+    let cmd_next = vec![
+        ("Done".to_string(), "Done".to_string()),
+        ("Show another page".to_string(), "Next".to_string()),
+    ];
     let cmd_next = cmd_next
         .iter()
-        .map(|cmd| cmd.to_string())
-        .map(|cmd| InlineKeyboardButton::callback(cmd.clone(), cmd));
+        .map(|cmd| InlineKeyboardButton::callback(cmd.0.to_owned(), cmd.1.to_owned()));
     let sent = bot
         .send_message(chat_id, "What now?")
         .reply_markup(InlineKeyboardMarkup::new([cmd_next]))
@@ -584,7 +586,7 @@ async fn next_page(
     clean_buttons(bot.clone(), chat_id, m_id).await?;
     let cmd_next = &q.data.unwrap_or_else(|| "Done".to_string());
     match cmd_next.as_str() {
-        "Show more" => {
+        "Next" => {
             let prev = send_page(bot, &mut rcmd, chat_id).await?;
             dialogue
                 .update(State::NextPage {
