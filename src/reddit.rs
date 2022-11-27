@@ -137,6 +137,7 @@ fn get_type(url: &str) -> Option<FSFile> {
         | url.ends_with(".mkv")
         | url.ends_with(".webm")
         | url.ends_with(".gifv")
+        | url.ends_with(".gif")
         | url.starts_with("https://v.redd.it")
         | url.starts_with("https://gfycat.com")
     {
@@ -146,7 +147,6 @@ fn get_type(url: &str) -> Option<FSFile> {
         | url.ends_with(".jpeg")
         | url.ends_with(".png")
         | url.ends_with(".webp")
-        | url.ends_with(".gif")
         | url.starts_with("https://i.redd.it")
         | url.starts_with("https://i.imgur.com")
     {
