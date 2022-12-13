@@ -51,7 +51,17 @@ impl FSFile {
         fname: InputFile,
     ) -> Result<Message, teloxide::RequestError> {
         match self {
-            FSFile::Image { f: _ } => bot.send_photo(chat_id, fname).await,
+            FSFile::Image { f: _ } => {
+                // send as image
+                let res = bot.send_photo(chat_id, fname.clone()).await;
+                if res.is_ok() {
+                    res
+                }
+                // if resolution is too high, send as document
+                else {
+                    bot.send_document(chat_id, fname).await
+                }
+            }
             FSFile::Video { f: _ } => bot.send_video(chat_id, fname).await,
         }
     }
@@ -91,30 +101,24 @@ async fn get_posts_raw(rcmd: &mut RedditCmd) -> Vec<BasicThing<SubmissionData>> 
     }
 }
 
-async fn send_tit_url(bot: &Bot, chat_id: ChatId, tit: String, url: String) -> HandlerResult {
-    let tit_url = format!("{}\n{}", tit, url);
-    bot.send_message(chat_id, tit_url).await?;
-    Ok(())
-}
-
 pub async fn send_posts(bot: Bot, chat_id: ChatId, rcmd: &mut RedditCmd) -> HandlerResult {
     let p_raw = get_posts_raw(rcmd).await;
     for post in p_raw {
         if post.data.stickied {
             continue;
         }
-        let max_size = 50000000; // 50MB
+        let max_size = 50_000_000; // 50MB
         let tit = post.data.title;
         let url = post.data.url.unwrap_or_default(); // defaults to ""
+        bot.send_message(chat_id, &tit).await?;
         if !url.is_empty() {
             let tmpfile = download(&url).await?;
             if let Some(tmpfile) = tmpfile {
                 let f = tmpfile.get_f();
                 let sz = fs::metadata(&f)?.len();
                 if sz > max_size {
-                    send_tit_url(&bot, chat_id, tit, url).await?;
+                    bot.send_message(chat_id, url).await?;
                 } else {
-                    bot.send_message(chat_id, &tit).await?;
                     let fname = InputFile::file(&f);
                     let res = tmpfile.send_out(&bot, chat_id, fname).await;
                     if res.is_err() {
@@ -123,10 +127,8 @@ pub async fn send_posts(bot: Bot, chat_id: ChatId, rcmd: &mut RedditCmd) -> Hand
                 }
                 std::fs::remove_file(f)?;
             } else {
-                send_tit_url(&bot, chat_id, tit, url).await?;
+                bot.send_message(chat_id, url).await?;
             }
-        } else {
-            send_tit_url(&bot, chat_id, tit, url).await?;
         }
     }
     Ok(())
