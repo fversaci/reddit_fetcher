@@ -26,6 +26,8 @@ RUST_LOG=reddit_fetcher=info \
 cargo run --release
 ```
 
+[![Video example](http://img.youtube.com/vi/yx1IliqIO6s/0.jpg)](http://www.youtube.com/watch?v=yx1IliqIO6s)
+
 ## Configuration
 
 ### Filtering the user access
