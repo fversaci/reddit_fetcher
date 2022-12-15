@@ -22,11 +22,12 @@ Assuming you have cargo correctly setup, just run:
 ```bash
 TELOXIDE_TOKEN=123_YOUR_TELEGRAM_BOT_TOKEN_567 \
 DATABASE_URL="sqlite://conf/users.db3" \
-RUST_LOG=reddit_fetcher=info \
 cargo run --release
 ```
 
-[![Video example](http://img.youtube.com/vi/yx1IliqIO6s/0.jpg)](http://www.youtube.com/watch?v=yx1IliqIO6s)
+Click image below to show an example video:
+
+[<img src="https://img.youtube.com/vi/yx1IliqIO6s/maxresdefault.jpg" width="50%">](https://www.youtube.com/watch?v=yx1IliqIO6s)
 
 ## Configuration
 
