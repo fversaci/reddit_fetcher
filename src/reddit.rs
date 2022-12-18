@@ -158,9 +158,9 @@ fn get_type(url: &str) -> Option<FSFile> {
 }
 
 async fn download(url: &str) -> Result<Option<FSFile>> {
-    let check = Url::parse(url)?;
+    let check = Url::parse(url);
     // allow only proper https urls
-    if check.scheme() != "https" {
+    if check.is_err() || check.unwrap().scheme() != "https" {
         return Ok(None);
     }
     let mut downloader = "yt-dlp";
