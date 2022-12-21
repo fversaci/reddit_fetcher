@@ -107,12 +107,13 @@ pub async fn send_posts(bot: Bot, chat_id: ChatId, rcmd: &mut RedditCmd) -> Hand
         if post.data.stickied {
             continue;
         }
-        let max_size = 50_000_000; // 50MB
+        let max_mb = 50; // 50MB
+        let max_size = max_mb * 1_000_000;
         let tit = post.data.title;
         let url = post.data.url.unwrap_or_default(); // defaults to ""
         bot.send_message(chat_id, &tit).await?;
         if !url.is_empty() {
-            let tmpfile = download(&url).await?;
+            let tmpfile = download(&url, max_mb).await?;
             if let Some(tmpfile) = tmpfile {
                 let f = tmpfile.get_f();
                 let sz = fs::metadata(&f)?.len();
@@ -158,44 +159,52 @@ fn get_type(url: &str) -> Option<FSFile> {
     None
 }
 
-async fn download(url: &str) -> Result<Option<FSFile>> {
+async fn download(url: &str, max_mb: u64) -> Result<Option<FSFile>> {
     let check = Url::parse(url);
+    let max_sz = format!("{}M", max_mb);
     // allow only proper https urls
     if check.is_err() || check.unwrap().scheme() != "https" {
         return Ok(None);
     }
-    let mut downloader = "yt-dlp";
-    let mut save_as = "-o";
+    // command arguments
+    let downloader;
+    let save_as;
+    let ext;
     let typ = get_type(url);
     if typ.is_none() {
         return Ok(None);
     }
+    let mut args = Vec::new();
     let typ = typ.unwrap();
-    let ext = match typ {
+    // image or video?
+    match typ {
         FSFile::Image { f: _ } => {
-            // use wget for images
             downloader = "wget";
             save_as = "-O";
-            ".jpg"
+            ext = ".jpg";
         }
-        FSFile::Video { f: _ } => ".mp4",
-    };
+        FSFile::Video { f: _ } => {
+            downloader = "yt-dlp";
+            save_as = "-o";
+            ext = ".mp4";
+            args.push("--max-filesize");
+            args.push(&max_sz);
+        }
+    }
     let base_dir = "/tmp/red_fetch/";
     fs::create_dir_all(base_dir)?;
     let tmpfile = format!("{}{}{}", base_dir, Uuid::new_v4(), ext);
-    let child = Command::new(downloader)
-        .arg("-q")
-        .arg(save_as)
-        .arg(&tmpfile)
-        .arg(url)
-        .spawn();
+    let mut new_args = vec!["-q", save_as, &tmpfile, url];
+    args.append(&mut new_args);
+    let child = Command::new(downloader).args(args).spawn();
     if child.is_err() {
         return Ok(None);
     };
 
     // Await until the command completes
     let status = child.unwrap().wait().await?;
-    if status.success() {
+    let md = fs::metadata(&tmpfile);
+    if status.success() && md.is_ok() {
         match typ {
             FSFile::Image { f: _ } => Ok(Some(FSFile::Image { f: tmpfile })),
             FSFile::Video { f: _ } => Ok(Some(FSFile::Video { f: tmpfile })),
