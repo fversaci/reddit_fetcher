@@ -122,6 +122,7 @@ pub async fn send_posts(bot: Bot, chat_id: ChatId, rcmd: &mut RedditCmd) -> Hand
                     let fname = InputFile::file(&f);
                     let res = tmpfile.send_out(&bot, chat_id, fname).await;
                     if res.is_err() {
+                        log::info!("Cannot send file: {}", res.unwrap_err());
                         bot.send_message(chat_id, url).await?;
                     }
                 }
