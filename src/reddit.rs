@@ -107,8 +107,8 @@ pub async fn send_posts(bot: Bot, chat_id: ChatId, rcmd: &mut RedditCmd) -> Hand
         if post.data.stickied {
             continue;
         }
-        let max_mb = 50; // 50MB
-        let max_size = max_mb * 1_000_000;
+        let max_mb = 50; // 50 MiB
+        let max_size = max_mb * 1_048_576;
         let tit = post.data.title;
         let url = post.data.url.unwrap_or_default(); // defaults to ""
         bot.send_message(chat_id, &tit).await?;
