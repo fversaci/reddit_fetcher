@@ -1,7 +1,7 @@
 use crate::persist;
 use crate::reddit;
 use crate::reddit::{RedReq, RedditCmd};
-use crate::{HashSet, MyState, SubredditsCats};
+use crate::{HashSet, MyState, SubredditsCats, UrlMatches};
 use std::str::FromStr;
 use std::sync::Arc;
 use strum::IntoEnumIterator;
@@ -519,12 +519,13 @@ async fn send_page(
     bot: Bot,
     rcmd: &mut RedditCmd,
     chat_id: ChatId,
+    url_matches: &UrlMatches,
 ) -> Result<Option<MessageId>, Box<dyn std::error::Error + Send + Sync>> {
     let summary = format!(
         "*Shown {} {} posts from {} / {}*",
         rcmd.tot, rcmd.view, rcmd.category, rcmd.subreddit
     );
-    reddit::send_posts(bot.clone(), chat_id, rcmd).await?;
+    reddit::send_posts(bot.clone(), chat_id, rcmd, url_matches).await?;
     let md = payloads::SendMessage::new(chat_id, summary);
     type Sender = JsonRequest<payloads::SendMessage>;
     let sent = Sender::new(bot.clone(), md.clone().parse_mode(ParseMode::MarkdownV2)).await;
@@ -564,7 +565,8 @@ async fn issue_cmd(
     let mut rcmd = RedditCmd { tot, ..rcmd };
     log::info!("{chat_id} {rcmd:?}");
     // send pages and show next/quit menu
-    let prev = send_page(bot.clone(), &mut rcmd, chat_id).await?;
+    let url_matches = &my_state.my_conf.url_matches;
+    let prev = send_page(bot.clone(), &mut rcmd, chat_id, url_matches).await?;
     dialogue
         .update(State::NextPage {
             my_state,
@@ -587,7 +589,8 @@ async fn next_page(
     let cmd_next = &q.data.unwrap_or_else(|| "Done".to_string());
     match cmd_next.as_str() {
         "Next" => {
-            let prev = send_page(bot, &mut rcmd, chat_id).await?;
+            let url_matches = &my_state.my_conf.url_matches;
+            let prev = send_page(bot, &mut rcmd, chat_id, url_matches).await?;
             dialogue
                 .update(State::NextPage {
                     my_state,

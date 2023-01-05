@@ -11,9 +11,20 @@ mod telegram;
 
 pub type SubredditsCats = HashMap<String, Vec<String>>;
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct StartEnd {
+    starts: Vec<String>,
+    endings: Vec<String>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct UrlMatches {
+    image: StartEnd,
+    video: StartEnd,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MyBotConfig {
     cat_subreddits: SubredditsCats,
     id_whitelist: HashSet<ChatId>,
+    url_matches: UrlMatches,
 }
 
 #[derive(Clone, Debug)]

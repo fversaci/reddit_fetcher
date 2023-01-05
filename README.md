@@ -58,6 +58,13 @@ Users can download a JSON description of their currently active
 subreddits via the `/getsubs` command, upload a customized version via
 `/sendsubs` and delete any existing customization with `/delsubs`.
 
+### Choosing which images and videos to download automatically
+
+In the configuration file there are also lists of defaults prefixes
+(e.g., `https://i.redd.it`) and suffixes (e.g., `.jpg`) for URLs to be
+considered images or videos, to allow their automatic download as soon
+as a match occurs.  If needed, you can customize this list to include
+other websites or file extensions.
 
 ## Author
 

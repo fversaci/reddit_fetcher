@@ -1,4 +1,5 @@
 use crate::telegram::HandlerResult;
+use crate::UrlMatches;
 use anyhow::Result;
 use roux::util::{FeedOption, TimePeriod};
 use roux::{response::BasicThing, submission::SubmissionData, Subreddit};
@@ -101,7 +102,12 @@ async fn get_posts_raw(rcmd: &mut RedditCmd) -> Vec<BasicThing<SubmissionData>> 
     }
 }
 
-pub async fn send_posts(bot: Bot, chat_id: ChatId, rcmd: &mut RedditCmd) -> HandlerResult {
+pub async fn send_posts(
+    bot: Bot,
+    chat_id: ChatId,
+    rcmd: &mut RedditCmd,
+    url_matches: &UrlMatches,
+) -> HandlerResult {
     let p_raw = get_posts_raw(rcmd).await;
     for post in p_raw {
         if post.data.stickied {
@@ -113,7 +119,7 @@ pub async fn send_posts(bot: Bot, chat_id: ChatId, rcmd: &mut RedditCmd) -> Hand
         let url = post.data.url.unwrap_or_default(); // defaults to ""
         bot.send_message(chat_id, &tit).await?;
         if !url.is_empty() {
-            let tmpfile = download(&url, max_mb).await?;
+            let tmpfile = download(&url, max_mb, url_matches).await?;
             if let Some(tmpfile) = tmpfile {
                 let f = tmpfile.get_f();
                 let sz = fs::metadata(&f)?.len();
@@ -136,30 +142,31 @@ pub async fn send_posts(bot: Bot, chat_id: ChatId, rcmd: &mut RedditCmd) -> Hand
     Ok(())
 }
 
-fn get_type(url: &str) -> Option<FSFile> {
-    if url.ends_with(".mp4")
-        | url.ends_with(".mkv")
-        | url.ends_with(".webm")
-        | url.ends_with(".gifv")
-        | url.ends_with(".gif")
-        | url.starts_with("https://v.redd.it")
-        | url.starts_with("https://gfycat.com")
-    {
+fn get_type(url: &str, url_matches: &UrlMatches) -> Option<FSFile> {
+    let mut is_video = false;
+    for s in &url_matches.video.endings {
+        is_video |= url.ends_with(s);
+    }
+    for s in &url_matches.video.starts {
+        is_video |= url.starts_with(s);
+    }
+    if is_video {
         return Some(FSFile::Video { f: "".to_string() });
     }
-    if url.ends_with(".jpg")
-        | url.ends_with(".jpeg")
-        | url.ends_with(".png")
-        | url.ends_with(".webp")
-        | url.starts_with("https://i.redd.it")
-        | url.starts_with("https://i.imgur.com")
-    {
+    let mut is_image = false;
+    for s in &url_matches.image.endings {
+        is_image |= url.ends_with(s);
+    }
+    for s in &url_matches.image.starts {
+        is_image |= url.starts_with(s);
+    }
+    if is_image {
         return Some(FSFile::Image { f: "".to_string() });
     }
     None
 }
 
-async fn download(url: &str, max_mb: u64) -> Result<Option<FSFile>> {
+async fn download(url: &str, max_mb: u64, url_matches: &UrlMatches) -> Result<Option<FSFile>> {
     let check = Url::parse(url);
     let max_sz = format!("{}M", max_mb);
     // allow only proper https urls
@@ -170,7 +177,7 @@ async fn download(url: &str, max_mb: u64) -> Result<Option<FSFile>> {
     let downloader;
     let save_as;
     let ext;
-    let typ = get_type(url);
+    let typ = get_type(url, url_matches);
     if typ.is_none() {
         return Ok(None);
     }

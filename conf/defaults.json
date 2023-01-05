@@ -59,5 +59,32 @@
     ]
   },
   "id_whitelist": [
-  ]
+  ],
+  "url_matches": {
+    "image": {
+      "starts": [
+        "https://i.redd.it",
+        "https://i.imgur.com"
+      ],
+      "endings": [
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".webp"
+      ]
+    },
+    "video": {
+      "starts": [
+        "https://v.redd.it",
+        "https://gfycat.com"
+      ],
+      "endings": [
+        ".mp4",
+        ".mkv",
+        ".webm",
+        ".gifv",
+        ".gif"
+      ]
+    }
+  }
 }
