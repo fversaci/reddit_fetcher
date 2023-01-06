@@ -1,4 +1,3 @@
-use crate::telegram::HandlerResult;
 use crate::UrlMatches;
 use anyhow::Result;
 use roux::util::{FeedOption, TimePeriod};
@@ -102,42 +101,61 @@ async fn get_posts_raw(rcmd: &mut RedditCmd) -> Vec<BasicThing<SubmissionData>> 
     }
 }
 
+pub async fn send_post(
+    post: BasicThing<SubmissionData>,
+    bot: Bot,
+    chat_id: ChatId,
+    url_matches: &UrlMatches,
+) -> Result<Message, teloxide::RequestError> {
+    let max_mb = 50; // 50 MiB
+    let max_size = max_mb * 1_048_576;
+    let tit = post.data.title;
+    let url = post.data.url.unwrap_or_default(); // defaults to ""
+    let tit_res = bot.send_message(chat_id, &tit).await?;
+    if url.is_empty() {
+        Ok(tit_res)
+    } else {
+        let mut res;
+        let tmpfile = download(&url, max_mb, url_matches).await?;
+        if let Some(tmpfile) = tmpfile {
+            let f = tmpfile.get_f();
+            let sz = fs::metadata(&f)?.len();
+            if sz > max_size {
+                log::info!("File too big to be sent, sending URL instead.");
+                res = bot.send_message(chat_id, url).await;
+            } else {
+                let fname = InputFile::file(&f);
+                res = tmpfile.send_out(&bot, chat_id, fname).await;
+                if res.is_err() {
+                    log::info!("Cannot send file: {}", res.unwrap_err());
+                    res = bot.send_message(chat_id, url).await;
+                }
+            }
+            std::fs::remove_file(f)?;
+            res
+        } else {
+            bot.send_message(chat_id, url).await
+        }
+    }
+}
+
 pub async fn send_posts(
     bot: Bot,
     chat_id: ChatId,
     rcmd: &mut RedditCmd,
     url_matches: &UrlMatches,
-) -> HandlerResult {
+) -> Result<()> {
     let p_raw = get_posts_raw(rcmd).await;
+    let mut posts_sent = Vec::new();
     for post in p_raw {
         if post.data.stickied {
             continue;
         }
-        let max_mb = 50; // 50 MiB
-        let max_size = max_mb * 1_048_576;
-        let tit = post.data.title;
-        let url = post.data.url.unwrap_or_default(); // defaults to ""
-        bot.send_message(chat_id, &tit).await?;
-        if !url.is_empty() {
-            let tmpfile = download(&url, max_mb, url_matches).await?;
-            if let Some(tmpfile) = tmpfile {
-                let f = tmpfile.get_f();
-                let sz = fs::metadata(&f)?.len();
-                if sz > max_size {
-                    bot.send_message(chat_id, url).await?;
-                } else {
-                    let fname = InputFile::file(&f);
-                    let res = tmpfile.send_out(&bot, chat_id, fname).await;
-                    if res.is_err() {
-                        log::info!("Cannot send file: {}", res.unwrap_err());
-                        bot.send_message(chat_id, url).await?;
-                    }
-                }
-                std::fs::remove_file(f)?;
-            } else {
-                bot.send_message(chat_id, url).await?;
-            }
-        }
+        let sent = send_post(post, bot.clone(), chat_id, url_matches);
+        posts_sent.push(sent);
+    }
+    for sent in posts_sent {
+        sent.await?;
     }
     Ok(())
 }
@@ -166,7 +184,11 @@ fn get_type(url: &str, url_matches: &UrlMatches) -> Option<FSFile> {
     None
 }
 
-async fn download(url: &str, max_mb: u64, url_matches: &UrlMatches) -> Result<Option<FSFile>> {
+async fn download(
+    url: &str,
+    max_mb: u64,
+    url_matches: &UrlMatches,
+) -> Result<Option<FSFile>, teloxide::RequestError> {
     let check = Url::parse(url);
     let max_sz = format!("{}M", max_mb);
     // allow only proper https urls
