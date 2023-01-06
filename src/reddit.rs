@@ -4,6 +4,7 @@ use roux::util::{FeedOption, TimePeriod};
 use roux::{response::BasicThing, submission::SubmissionData, Subreddit};
 use std::fs;
 use strum_macros::{Display, EnumIter, EnumString};
+use teloxide::payloads::{SendDocumentSetters, SendPhotoSetters, SendVideoSetters};
 use teloxide::prelude::{ChatId, Requester};
 use teloxide::types::{InputFile, Message};
 use teloxide::Bot;
@@ -49,20 +50,21 @@ impl FSFile {
         bot: &Bot,
         chat_id: ChatId,
         fname: InputFile,
+        tit: &String,
     ) -> Result<Message, teloxide::RequestError> {
         match self {
             FSFile::Image { f: _ } => {
                 // send as image
-                let res = bot.send_photo(chat_id, fname.clone()).await;
+                let res = bot.send_photo(chat_id, fname.clone()).caption(tit).await;
                 if res.is_ok() {
                     res
                 }
                 // if resolution is too high, send as document
                 else {
-                    bot.send_document(chat_id, fname).await
+                    bot.send_document(chat_id, fname).caption(tit).await
                 }
             }
-            FSFile::Video { f: _ } => bot.send_video(chat_id, fname).await,
+            FSFile::Video { f: _ } => bot.send_video(chat_id, fname).caption(tit).await,
         }
     }
 }
@@ -111,8 +113,9 @@ pub async fn send_post(
     let max_size = max_mb * 1_048_576;
     let tit = post.data.title;
     let url = post.data.url.unwrap_or_default(); // defaults to ""
-    let tit_res = bot.send_message(chat_id, &tit).await?;
+    let alt_msg = format!("{}\n{}", &tit, &url);
     if url.is_empty() {
+        let tit_res = bot.send_message(chat_id, &tit).await?;
         Ok(tit_res)
     } else {
         let mut res;
@@ -122,19 +125,19 @@ pub async fn send_post(
             let sz = fs::metadata(&f)?.len();
             if sz > max_size {
                 log::info!("File too big to be sent, sending URL instead.");
-                res = bot.send_message(chat_id, url).await;
+                res = bot.send_message(chat_id, alt_msg).await;
             } else {
                 let fname = InputFile::file(&f);
-                res = tmpfile.send_out(&bot, chat_id, fname).await;
+                res = tmpfile.send_out(&bot, chat_id, fname, &tit).await;
                 if res.is_err() {
                     log::info!("Cannot send file: {}", res.unwrap_err());
-                    res = bot.send_message(chat_id, url).await;
+                    res = bot.send_message(chat_id, alt_msg).await;
                 }
             }
             std::fs::remove_file(f)?;
             res
         } else {
-            bot.send_message(chat_id, url).await
+            bot.send_message(chat_id, alt_msg).await
         }
     }
 }
