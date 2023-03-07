@@ -41,7 +41,7 @@ pub async fn insert_pref(
     .bind(chat_id.0)
     .bind(cats)
     .bind(subs)
-    .execute(&mut conn)
+    .execute(&mut *conn)
     .await?;
     Ok(())
 }
@@ -50,7 +50,7 @@ pub async fn del_prefs(db: &SqlitePool, chat_id: ChatId) -> Result<u64, sqlx::Er
     let mut conn = db.acquire().await?;
     let res = sqlx::query("DELETE FROM user_pref WHERE user_id = ?;")
         .bind(chat_id.0)
-        .execute(&mut conn)
+        .execute(&mut *conn)
         .await?;
     Ok(res.rows_affected())
 }
