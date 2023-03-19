@@ -115,8 +115,7 @@ pub async fn send_post(
     let url = post.data.url.unwrap_or_default(); // defaults to ""
     let alt_msg = format!("{}\n{}", &tit, &url);
     if url.is_empty() {
-        let tit_res = bot.send_message(chat_id, &tit).await?;
-        Ok(tit_res)
+        bot.send_message(chat_id, &tit).await
     } else {
         let mut res;
         let tmpfile = download(&url, max_mb, url_matches).await?;
